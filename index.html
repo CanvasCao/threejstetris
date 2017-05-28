@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>threeJsTetris</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            overflow: hidden;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+<div id='webgl'></div>
+<div id='stat'></div>
+
+<script src='public/three.js'></script>
+<script src='public/stats.js'></script>
+<!--<script src='public/dat.gui.js'></script>-->
+<script src='public/underscore.js'></script>
+<script src='public/tetrisFns/tetrisFns.js'></script>
+<script src='public/threeFns/threeFns.js'></script>
+<script>
+    onload = function () {
+        // step2 场景 相机 渲染器 三件套... 可能有stats
+        var scene = new THREE.Scene();
+
+        camera = new THREE.OrthographicCamera(window.innerWidth / -16, window.innerWidth / 16, window.innerHeight / 16, window.innerHeight / -16, -200, 500);
+        camera.position.x = 45;
+        camera.position.y = 45;
+        camera.position.z = 45;
+        camera.lookAt(scene.position);
+
+//        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+//        camera.position.x = 0;
+//        camera.position.y = 30;
+//        camera.position.z = 200;
+//        camera.lookAt(scene.position);
+        scene.add(camera);
+
+        var renderer = new THREE.WebGLRenderer();
+
+        renderer.setClearColor(new THREE.Color(0xEEEEEE, 1.0));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMapEnabled = true//渲染器需要阴影...
+        document.getElementById("webgl").appendChild(renderer.domElement);
+
+        var stats = initStats();
+
+        // step3 创建平板...
+        var planeGeometry = new THREE.PlaneGeometry(GameParas.width*GameParas.perWidth, GameParas.width*GameParas.perWidth, 1, 1);
+        var planeMaterial = new THREE.MeshLambertMaterial({color: 0xeeeeee});
+        var plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.receiveShadow = true;//平板是接受阴影的...
+
+        plane.rotation.x = -0.5 * Math.PI;
+        plane.position.x = 20;
+        plane.position.y = 0;
+        plane.position.z = 20;
+        scene.add(plane);
+
+
+        //step4 全局环境光 和 单点散发的射线...
+        var ambientLight = new THREE.AmbientLight(0x0c0c0c);
+        scene.add(ambientLight);
+
+        var directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(0, 20, 60);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        var spotLight = new THREE.SpotLight(0xffffff,0.5);
+        spotLight.position.set(0, 80, -10);
+        spotLight.lookAt(scene)
+        spotLight.onlyShadow=true;
+        spotLight.castShadow = true;
+        scene.add(spotLight);
+
+
+
+        var allCubes = [];
+        var cubeGeometry = new THREE.BoxGeometry(GameParas.perWidth, GameParas.perWidth, GameParas.perWidth);
+        for (var i = GameParas.height - 1; i > -1; i--) {//之前错误的坐标轴 现在y轴需要从上往下遍历插入数组
+            allCubes.push([]);
+            for (var j = 0; j < GameParas.width; j++) {//x轴需要从左往右遍历插入数组
+                var cubeMaterial = new THREE.MeshPhongMaterial();
+//                cubeMaterial.color = new THREE.Color(100, 0, 0);
+                var cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+                cube.position.z = 20;
+                cube.position.x = -2 + j * GameParas.perWidth;
+                cube.position.y = GameParas.perWidth/2 + i * GameParas.perWidth;
+                cube.visible = false;
+                cube.castShadow = true;//平板是接受阴影的...
+
+
+                allCubes[allCubes.length - 1].push(cube);
+                scene.add(cube);
+            }
+        }
+
+        window.currentBlock = new OneSevenType(GameHelper.GetRanIndex());
+
+
+        var autoMoveStartTime = new Date().getTime();
+        var autoMoveFPS = 2;
+        render();
+        function render() {
+            stats.update();
+            renderer.render(scene, camera);
+
+            [].forEach.call(allCubes, function (e, i, arr) {
+                [].forEach.call(e, function (e2) {
+                    e2.visible = false;
+                });
+            });
+            [].forEach.call(currentBlock.SmallBlocksArr, function (e, i, arr) {
+                allCubes[e.y][e.x].visible = true;
+                allCubes[e.y][e.x].material.color = new THREE.Color(e.rgb);
+            });
+            [].forEach.call(gameBoard.stoppedArr, function (e, i, arr) {
+                allCubes[e.y][e.x].visible = true;
+                allCubes[e.y][e.x].material.color = new THREE.Color(e.rgb);
+            });
+
+
+            var curTime = new Date().getTime();
+            var diff = curTime - autoMoveStartTime;
+            if (diff >= 1000 / autoMoveFPS) {
+                autoMoveStartTime = new Date().getTime();
+                if (!GameHelper.IfTouching(currentBlock, 40)) {
+                    currentBlock.DownOne();
+                }
+                else { //碰到了就ThingsAfterTouchingGround
+                    gameBoard.ThingsAfterTouchingGround();
+                }
+            }
+
+            requestAnimationFrame(render);
+        }
+
+
+    }
+</script>
+</body>
+</html>
